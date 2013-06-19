@@ -7,6 +7,7 @@ import (
 
 type JsonWebsocket struct {
 	ws *websocket.Conn
+	msgs chan map[string]interface{}
 }
 
 func NewJsonWebsocket(cfg *websocket.Config) (*JsonWebsocket, error) {
@@ -15,7 +16,7 @@ func NewJsonWebsocket(cfg *websocket.Config) (*JsonWebsocket, error) {
 		return nil, err
 	}
 
-	return &JsonWebsocket{ws}, nil
+	return &JsonWebsocket{ws: ws}, nil
 }
 
 func (jws *JsonWebsocket) Recv() (map[string]interface{}, error) {
@@ -29,11 +30,14 @@ func (jws *JsonWebsocket) Send(obj map[string]interface{}) error {
 }
 
 func (jws *JsonWebsocket) Close() error {
+	if jws.msgs != nil {
+		close(jws.msgs)
+	}
 	return jws.ws.Close()
 }
 
 func (ws *JsonWebsocket) RecvForever() chan map[string]interface{} {
-	msgs := make(chan map[string]interface{})
+	ws.msgs = make(chan map[string]interface{})
 	go func() {
 		for {
 			obj, err := ws.Recv()
@@ -46,8 +50,8 @@ func (ws *JsonWebsocket) RecvForever() chan map[string]interface{} {
 
 			fmt.Println("Recieved message", obj)
 
-			msgs <- obj
+			ws.msgs <- obj
 		}
 	}()
-	return msgs
+	return ws.msgs
 }

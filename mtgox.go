@@ -3,30 +3,38 @@ package mtgox
 import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
+	"strings"
+	"errors"
+	"encoding/base64"
+	"encoding/json"
 )
 
 const (
 	api_host   string = "websocket.mtgox.com"
 	api_path   string = "/mtgox"
-	origin_url string = "http://github.com/yanatan16"
+	http_endpoint string = "http://mtgox.com/api/2"
+	origin_url string = "http://localhost"
 )
 
 var (
 	// TODO: use https://mtgox.com/api/2/stream/list_public
-	channels map[string]string = map[string]string{
-		"ticker": "d5f06780-30a8-4a48-a2f8-7ed181b4a13f",
-		"depth":  "24e67e0d-1cad-4cc0-9e7a-f8523ef460fe",
-		"trades": "dbf1dee9-4f2e-4a08-8cb7-748919a71b21",
-	}
+	channels map[string]string = make(map[string]string)
+	randStr chan string
 )
 
 type StreamingApi struct {
+	*MsgWatcher
 	ws       *JsonWebsocket
-	Messages chan map[string]interface{}
+	Key string
 }
 
-func NewStreamingApi(currencies string) (*StreamingApi, error) {
-	config, _ := websocket.NewConfig(fmt.Sprintf("ws://%s%s?Currency=%s", api_host, api_path, currencies), "http://localhost")
+type Sender interface {
+	Send(map[string]interface{}) error
+}
+
+func NewStreamingApi(currencies ...string) (*StreamingApi, error) {
+	url := fmt.Sprintf("ws://%s%s?Currency=%s", api_host, api_path, strings.Join(currencies, ","))
+	config, _ := websocket.NewConfig(url, origin_url)
 	ws, err := NewJsonWebsocket(config)
 
 	if err != nil {
@@ -34,8 +42,8 @@ func NewStreamingApi(currencies string) (*StreamingApi, error) {
 	}
 
 	api := &StreamingApi{
+		MsgWatcher: NewMsgWatcher(ws.RecvForever(), "op"),
 		ws:       ws,
-		Messages: ws.RecvForever(),
 	}
 
 	return api, nil
@@ -46,6 +54,52 @@ func (api *StreamingApi) Send(msg map[string]interface{}) error {
 }
 
 func (api *StreamingApi) Close() error {
-	close(api.Messages)
 	return api.ws.Close()
+}
+
+func (api *StreamingApi) Unsubscribe(name string) error {
+	if key, ok := channels[name]; ok {
+		return api.Send(map[string]interface{}{
+			"op": "unsubscribe",
+			"channel": key,
+		})
+	}
+
+	return errors.New("No channel with name " + name + ".")
+}
+
+func (api *StreamingApi) Subscribe(typ string) error {
+	return api.Send(map[string]interface{}{
+		"op": "mtgox.subscribe",
+		"type": typ,
+	})
+}
+
+func (api *StreamingApi) Sign(body []byte) (string, error) {
+	return "", nil
+}
+
+func (api *StreamingApi) AuthenticatedSend(msg map[string]interface{}) error {
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	signedReq, err := api.Sign(req)
+	if err != nil {
+		return err
+	}
+
+	reqid := <- randStr
+
+	fullReq := api.Key + signedReq + string(req)
+	var encodedReq []byte
+	base64.StdEncoding.Encode(encodedReq, []byte(fullReq))
+
+	return api.Send(map[string]interface{}{
+		"op": "call",
+		"id": reqid,
+		"call": encodedReq,
+		"context": "mtgox.com",
+	})
 }
