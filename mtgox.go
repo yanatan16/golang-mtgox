@@ -1,3 +1,6 @@
+/*
+	Package mtgox provides a streaming implementation of Mt. Gox's bitcoin trading API.
+*/
 package mtgox
 
 import (
