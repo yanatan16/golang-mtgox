@@ -44,7 +44,11 @@ func TestInfoCall(t *testing.T) {
 
 	select {
 	case info := <-infoc:
-		fmt.Println("Info:", info)
+		if !info.Success {
+			t.Error("Call failed!", info.Error)
+		} else {
+			fmt.Println("Info:", info.Result)
+		}
 	case <-time.After(10 * time.Second):
 		t.Error("No message after a second.")
 	}

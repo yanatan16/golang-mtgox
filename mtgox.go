@@ -52,6 +52,12 @@ type Config struct {
 	Secret     string
 }
 
+type CallResult struct {
+	Result map[string]interface{}
+	Success bool
+	Error string
+}
+
 func NewFromConfig(cfgfile string) (*StreamingApi, error) {
 	file, err := ioutil.ReadFile(cfgfile)
 	if err != nil {
@@ -90,6 +96,13 @@ func New(key, secret string, currencies ...string) (*StreamingApi, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	remarks := api.Listen("remark")
+	go func() {
+		for remark := range remarks {
+			fmt.Println("Remark:", remark)
+		}
+	}()
 
 	return api, err
 }
@@ -154,6 +167,7 @@ func (api *StreamingApi) authenticatedSend(msg map[string]interface{}) error {
 	fullReq := append(append(api.key, signedReq...), req...)
 	encodedReq := base64.StdEncoding.EncodeToString(fullReq)
 
+	fmt.Println("Request:", string(req))
 	return api.ws.Send(map[string]interface{}{
 		"op":      "call",
 		"id":      reqid,
@@ -162,11 +176,14 @@ func (api *StreamingApi) authenticatedSend(msg map[string]interface{}) error {
 	})
 }
 
-func (api *StreamingApi) call(endpoint string, params map[string]interface{}) (chan map[string]interface{}, error) {
+func (api *StreamingApi) call(endpoint string, params map[string]interface{}) (chan *CallResult, error) {
+	if params == nil {
+		params = make(map[string]interface{})
+	}
 	msg := map[string]interface{}{
 		"call":   endpoint,
-		"params": params,
 		"item":   "BTC",
+		"params": params,
 		"id":     <-ids,
 		"nonce":  <-nonces,
 	}
@@ -176,14 +193,42 @@ func (api *StreamingApi) call(endpoint string, params map[string]interface{}) (c
 		return nil, err
 	}
 
-	return api.ListenResult(msg["id"].(string)), nil
+	out := interpretResult(api.ListenResult(msg["id"].(string)))
+
+	return out, nil
 }
 
-func (api *StreamingApi) Info() (chan map[string]interface{}, error) {
+func interpretResult(in chan map[string]interface{}) (chan *CallResult) {
+	out := make(chan *CallResult)
+	go func () {
+		res := <- in
+		if op, ok := res["op"]; ok {
+			if op == "remark" {
+				out <- &CallResult{
+					Success: false,
+					Error: res["remark"].(string),
+				}
+			} else if op == "result" {
+				out <- &CallResult{
+					Success: true,
+					Result: res["result"].(map[string]interface{}),
+				}
+			} else {
+				out <- &CallResult{
+					Success: false,
+					Error: fmt.Sprintf("Don't know how to interpret: %s", res),
+				}
+			}
+		}
+	}()
+	return out
+}
+
+func (api *StreamingApi) Info() (chan *CallResult, error) {
 	return api.call("private/info", nil)
 }
 
-func (api *StreamingApi) Address(description string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) Address(description string) (chan *CallResult, error) {
 	m := make(map[string]interface{})
 	if description != "" {
 		m["description"] = description
@@ -191,7 +236,7 @@ func (api *StreamingApi) Address(description string) (chan map[string]interface{
 	return api.call("bitcoin/address", m)
 }
 
-func (api *StreamingApi) AddPrivateKey(key string, desc string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) AddPrivateKey(key string, desc string) (chan *CallResult, error) {
 	return api.call("bitcoin/addpriv", map[string]interface{}{
 		"key":         key,
 		"keytype":     "auto",
@@ -199,7 +244,7 @@ func (api *StreamingApi) AddPrivateKey(key string, desc string) (chan map[string
 	})
 }
 
-func (api *StreamingApi) AddWallet(walletdat, description string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) AddWallet(walletdat, description string) (chan *CallResult, error) {
 	m := map[string]interface{}{
 		"wallet": walletdat,
 	}
@@ -209,18 +254,18 @@ func (api *StreamingApi) AddWallet(walletdat, description string) (chan map[stri
 	return api.call("bitcoin/wallet_add", m)
 }
 
-func (api *StreamingApi) Send(addr string, amount_int uint64) (chan map[string]interface{}, error) {
+func (api *StreamingApi) Send(addr string, amount_int uint64) (chan *CallResult, error) {
 	return api.call("bitcoin/send_simple", map[string]interface{}{
 		"address":    addr,
 		"amount_int": amount_int,
 	})
 }
 
-func (api *StreamingApi) IdKey() (chan map[string]interface{}, error) {
+func (api *StreamingApi) IdKey() (chan *CallResult, error) {
 	return api.call("private/idkey", nil)
 }
 
-func (api *StreamingApi) FullHistory(currency string, page int) (chan map[string]interface{}, error) {
+func (api *StreamingApi) FullHistory(currency string, page int) (chan *CallResult, error) {
 	m := map[string]interface{}{
 		"currency": currency,
 	}
@@ -230,7 +275,7 @@ func (api *StreamingApi) FullHistory(currency string, page int) (chan map[string
 	return api.call("wallet/history", m)
 }
 
-func (api *StreamingApi) QueryHistory(currency string, typ string, begin, end *time.Time, page int) (chan map[string]interface{}, error) {
+func (api *StreamingApi) QueryHistory(currency string, typ string, begin, end *time.Time, page int) (chan *CallResult, error) {
 	m := map[string]interface{}{
 		"currency": currency,
 	}
@@ -249,7 +294,7 @@ func (api *StreamingApi) QueryHistory(currency string, typ string, begin, end *t
 	return api.call("wallet/history", m)
 }
 
-func (api *StreamingApi) SubmitOrder(typ string, amount, price uint64) (chan map[string]interface{}, error) {
+func (api *StreamingApi) SubmitOrder(typ string, amount, price uint64) (chan *CallResult, error) {
 	return api.call("order/add", map[string]interface{}{
 		"type":       typ,
 		"amount_int": amount,
@@ -257,24 +302,24 @@ func (api *StreamingApi) SubmitOrder(typ string, amount, price uint64) (chan map
 	})
 }
 
-func (api *StreamingApi) CancelOrder(oid string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) CancelOrder(oid string) (chan *CallResult, error) {
 	return api.call("order/cancel", map[string]interface{}{
 		"oid": oid,
 	})
 }
 
-func (api *StreamingApi) Orders() (chan map[string]interface{}, error) {
+func (api *StreamingApi) Orders() (chan *CallResult, error) {
 	return api.call("private/orders", nil)
 }
 
-func (api *StreamingApi) OrderResult(oid string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) OrderResult(oid string) (chan *CallResult, error) {
 	return api.call("order/result", map[string]interface{}{"oid": oid})
 }
 
-func (api *StreamingApi) AddressDetails(addr string) (chan map[string]interface{}, error) {
+func (api *StreamingApi) AddressDetails(addr string) (chan *CallResult, error) {
 	return api.call("bitcoin/addr_details", map[string]interface{}{"hash": addr})
 }
 
-func (api *StreamingApi) Lag() (chan map[string]interface{}, error) {
+func (api *StreamingApi) Lag() (chan *CallResult, error) {
 	return api.call("order/lag", nil)
 }

@@ -51,16 +51,12 @@ func (m *MsgWatcher) close() {
 	}
 }
 
-func (m *MsgWatcher) receiveResult(msg map[string]interface{}) {
-	if id, ok := msg["id"]; ok {
-		if rl, ok := m.resultListeners[id.(string)]; ok {
-			rl <- msg
-			close(rl)
-		} else {
-			m.results[id.(string)] = msg
-		}
+func (m *MsgWatcher) receiveResult(id string, msg map[string]interface{}) {
+	if rl, ok := m.resultListeners[id]; ok {
+		rl <- msg
+		close(rl)
 	} else {
-		log.Println("Error. Result message with no id field!?", msg)
+		m.results[id] = msg
 	}
 }
 
@@ -77,9 +73,11 @@ func (m *MsgWatcher) listen() {
 						m.Channels[key.(string)] = schan
 					}
 				}
-			} else if key == "result" {
-				m.receiveResult(msg)
-				continue
+			} else {
+				if id, ok := msg["id"]; ok {
+					m.receiveResult(id.(string), msg)
+					continue
+				}
 			}
 
 			if ls, ok := m.listeners[key.(string)]; ok {

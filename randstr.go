@@ -18,7 +18,7 @@ func nonceCreator() <-chan string {
 	nonce := make(chan string, 0)
 	go func() {
 		for {
-			nonce <- fmt.Sprintf("%x", []byte(time.Now().String()))
+			nonce <- fmt.Sprintf("%d", time.Now().Unix())
 		}
 	}()
 	return nonce
