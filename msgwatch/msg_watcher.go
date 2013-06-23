@@ -2,6 +2,7 @@ package msgwatch
 
 import (
 	"log"
+	exq "github.com/yanatan16/exchequer"
 )
 
 type MsgWatcher struct {
@@ -62,25 +63,25 @@ func (m *MsgWatcher) receiveResult(id string, msg map[string]interface{}) {
 
 func (m *MsgWatcher) listen() {
 	for msg := range m.in {
-		if key, ok := msg["op"]; ok {
+		query := exq.New(msg)
+		if key, err := query.String("op"); err == nil {
 			if key == "private" {
-				if key2, ok := msg["private"]; ok {
+				if key2, err := query.String("private"); err == nil {
 					key = key2
-				}
-
-				if channel, ok := msg["channel"]; ok {
-					if schan, ok := channel.(string); ok {
-						m.Channels[key.(string)] = schan
-					}
+				} else {
+					log.Println("Error parsing message. private has no key:", msg)
 				}
 			} else {
-				if id, ok := msg["id"]; ok {
-					m.receiveResult(id.(string), msg)
-					continue
+				if id, err := query.String("id"); err == nil {
+					m.receiveResult(id, msg)
 				}
 			}
 
-			if ls, ok := m.listeners[key.(string)]; ok {
+			if channel, err := query.String("channel"); err == nil {
+				m.Channels[key] = channel
+			}
+
+			if ls, ok := m.listeners[key]; ok {
 				for _, l := range ls {
 					select {
 					case l <- msg:
@@ -91,7 +92,7 @@ func (m *MsgWatcher) listen() {
 				log.Println("No listeners found for", key)
 			}
 		} else {
-			log.Println("No op field in message.", msg)
+			log.Println("Error parsing mesage. No op field:", msg)
 		}
 	}
 	m.close()

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"time"
+	exq "github.com/yanatan16/exchequer"
 )
 
 type StreamType string
@@ -202,7 +203,7 @@ func interpretResult(in chan map[string]interface{}) (chan *CallResult) {
 	out := make(chan *CallResult)
 	go func () {
 		res := <- in
-		if op, ok := res["op"]; ok {
+		if op, err := exq.String(res, "op"); err == nil {
 			if op == "remark" {
 				out <- &CallResult{
 					Success: false,
@@ -218,6 +219,11 @@ func interpretResult(in chan map[string]interface{}) (chan *CallResult) {
 					Success: false,
 					Error: fmt.Sprintf("Don't know how to interpret: %s", res),
 				}
+			}
+		} else {
+			out <- &CallResult{
+				Success: false,
+				Error: fmt.Sprintf("Error accessing object: %s", err.Error()),
 			}
 		}
 	}()
