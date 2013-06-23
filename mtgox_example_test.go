@@ -1,16 +1,10 @@
-# mtgox
+package mtgox
 
-An implementation of a Mt. Gox client in Go. It uses the [websocket interface](https://en.bitcoin.it/wiki/MtGox/API/Streaming).
+import (
+	"fmt"
+	"os"
+)
 
-_Note_: This API is experimental. It is being actively worked on however.
-
-## Documentation
-
-Example below. [API Documentation on Godoc](http://godoc.org/github.com/yanatan16/golang-mtgox).
-
-## Example
-
-```go
 func ExampleMtGoxApi() {
 	gox, err := NewFromConfig(os.ExpandEnv("$MTGOX_CONFIG"))
 	if err != nil {
@@ -40,8 +34,3 @@ func ExampleMtGoxApi() {
 		fmt.Println("Boo. Failure!", order.Error)
 	}
 }
-```
-
-## License
-
-MIT found in LICENSE file.

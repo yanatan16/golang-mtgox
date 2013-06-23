@@ -25,9 +25,11 @@ func New(in chan map[string]interface{}) *MsgWatcher {
 	return m
 }
 
-func (m *MsgWatcher) Listen(typ string) chan map[string]interface{} {
+func (m *MsgWatcher) Listen(typs ...string) chan map[string]interface{} {
 	c := make(chan map[string]interface{}, 2)
-	m.listeners[typ] = append(m.listeners[typ], c)
+	for _, typ := range typs {
+		m.listeners[typ] = append(m.listeners[typ], c)
+	}
 	return c
 }
 

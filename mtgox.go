@@ -125,17 +125,21 @@ func (api *StreamingApi) Unsubscribe(name string) error {
 }
 
 // Subscribe to a type of channel. Returns the Listen(typ) listener.
-func (api *StreamingApi) Subscribe(typ StreamType) (chan map[string]interface{}, error) {
-	err := api.ws.Send(map[string]interface{}{
-		"op":   "mtgox.subscribe",
-		"type": string(typ),
-	})
+func (api *StreamingApi) Subscribe(typs ...StreamType) (chan map[string]interface{}, error) {
+	names := make([]string, len(typs))
+	for i, typ := range typs {
+		err := api.ws.Send(map[string]interface{}{
+			"op":   "mtgox.subscribe",
+			"type": string(typ),
+		})
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		names[i] = string(typ)
 	}
 
-	return api.Listen("ticker"), nil
+	return api.Listen(names...), nil
 }
 
 func (api *StreamingApi) sign(body []byte) ([]byte, error) {
