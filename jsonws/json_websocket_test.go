@@ -1,4 +1,4 @@
-package mtgox
+package jsonws
 
 import (
 	"code.google.com/p/go.net/websocket"
@@ -70,7 +70,7 @@ func newJWS() *JsonWebsocket {
 	if err != nil {
 		panic(err)
 	}
-	jws, err := NewJsonWebsocket(cfg)
+	jws, err := New(cfg)
 	if err != nil {
 		panic(err)
 	}

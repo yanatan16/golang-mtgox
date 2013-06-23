@@ -1,16 +1,15 @@
-package mtgox
+package jsonws
 
 import (
 	"code.google.com/p/go.net/websocket"
-	"fmt"
 )
 
 type JsonWebsocket struct {
-	ws *websocket.Conn
+	ws   *websocket.Conn
 	msgs chan map[string]interface{}
 }
 
-func NewJsonWebsocket(cfg *websocket.Config) (*JsonWebsocket, error) {
+func New(cfg *websocket.Config) (*JsonWebsocket, error) {
 	ws, err := websocket.DialConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -47,8 +46,6 @@ func (ws *JsonWebsocket) RecvForever() chan map[string]interface{} {
 				}
 				panic(err)
 			}
-
-			fmt.Println("Recieved message", obj)
 
 			ws.msgs <- obj
 		}
