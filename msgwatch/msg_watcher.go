@@ -90,8 +90,6 @@ func (m *MsgWatcher) listen() {
 					default:
 					}
 				}
-			} else {
-				log.Println("No listeners found for", key)
 			}
 		} else {
 			log.Println("Error parsing mesage. No op field:", msg)
