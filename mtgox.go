@@ -62,6 +62,7 @@ type CallResult struct {
 	Error string
 }
 
+// Initialize a StreamingApi based on a json file unmarshalled into a Config object
 func NewFromConfig(cfgfile string) (*StreamingApi, error) {
 	file, err := ioutil.ReadFile(cfgfile)
 	if err != nil {
